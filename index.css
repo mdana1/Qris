@@ -1,19 +1,29 @@
 
-/* Custom Styles for Qris Selubang */
-.font-black {
-  font-weight: 900;
-}
-
-.tracking-tighter {
-  letter-spacing: -0.05em;
-}
-
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
-  25% { transform: translateX(-5px); }
-  75% { transform: translateX(5px); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
 }
 
 .animate-in.shake {
-  animation: shake 0.4s ease-in-out;
+  animation: shake 0.3s ease-in-out;
+}
+
+.font-black {
+  font-weight: 800;
+}
+
+/* Custom scrollbar for desktop */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #ef4444;
 }

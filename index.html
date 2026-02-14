@@ -1,10 +1,11 @@
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Qris Selubang - Static to Dynamic QRIS Generator</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Qris Selubang - Generator QRIS Dinamis Instan</title>
+    <meta name="description" content="Ubah QRIS statis toko Anda menjadi QRIS dinamis dengan nominal otomatis. Cepat, gratis, dan aman." />
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="importmap">
     {
@@ -19,20 +20,20 @@
     }
     </script>
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
       body {
-        font-family: 'Inter', sans-serif;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        -webkit-tap-highlight-color: transparent;
       }
-      .qr-shadow {
-        box-shadow: 0 20px 50px -12px rgba(220, 38, 38, 0.15);
-      }
-      /* Custom focus styles for the input */
-      input:focus {
-        background-color: white !important;
+      /* Hide arrows in number input */
+      input::-webkit-outer-spin-button,
+      input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
       }
     </style>
   </head>
-  <body class="bg-[#FDFCFB] text-slate-900 antialiased">
+  <body class="bg-[#FDFCFB] overflow-x-hidden">
     <div id="root"></div>
     <script type="module" src="./index.tsx"></script>
   </body>
