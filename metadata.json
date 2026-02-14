@@ -1,0 +1,7 @@
+{
+  "name": "QRIS SELUBANG",
+  "description": "Convert static QRIS images to dynamic QR codes with transaction amounts instantly using AI vision.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
