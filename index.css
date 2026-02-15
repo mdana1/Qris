@@ -5,6 +5,12 @@
   75% { transform: translateX(4px); }
 }
 
+@keyframes scan {
+  0% { top: 0; opacity: 1; }
+  50% { top: 100%; opacity: 1; }
+  100% { top: 0; opacity: 1; }
+}
+
 .animate-in.shake {
   animation: shake 0.3s ease-in-out;
 }

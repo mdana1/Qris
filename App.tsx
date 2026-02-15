@@ -24,7 +24,10 @@ import {
   Share2,
   Wallet,
   Sparkles,
-  Plus
+  Plus,
+  Camera,
+  StopCircle,
+  Maximize
 } from 'lucide-react';
 import { analyzeQrisImage } from './services/geminiService';
 import { generateDynamicQris, fileToBase64 } from './utils';
@@ -46,12 +49,16 @@ export const App: React.FC = () => {
   const [dynamicQrisPayload, setDynamicQrisPayload] = useState<string | null>(null);
   const [qrImageUrl, setQrImageUrl] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isCameraActive, setIsCameraActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
   const [savedMerchants, setSavedMerchants] = useState<QrisData[]>([]);
   const [showMerchantMenu, setShowMerchantMenu] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const scanIntervalRef = useRef<number | null>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem('qris_merchants');
@@ -67,6 +74,78 @@ export const App: React.FC = () => {
   const updateSavedMerchants = (newList: QrisData[]) => {
     setSavedMerchants(newList);
     localStorage.setItem('qris_merchants', JSON.stringify(newList));
+  };
+
+  const stopCamera = () => {
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
+    setIsCameraActive(false);
+  };
+
+  const startCamera = async () => {
+    setError(null);
+    setIsProcessing(false);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' }, 
+        audio: false 
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        setIsCameraActive(true);
+        // Start auto-capture loop
+        scanIntervalRef.current = window.setInterval(captureAndAnalyzeFrame, 3000);
+      }
+    } catch (err: any) {
+      setError("Izin kamera ditolak atau kamera tidak ditemukan.");
+      setIsCameraActive(false);
+    }
+  };
+
+  const captureAndAnalyzeFrame = async () => {
+    if (!videoRef.current || !canvasRef.current || !isCameraActive || isProcessing) return;
+
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    const context = canvas.getContext('2d');
+
+    if (context && video.readyState === video.HAVE_ENOUGH_DATA) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      const base64 = canvas.toDataURL('image/png');
+      
+      setIsProcessing(true);
+      try {
+        const result = await analyzeQrisImage(base64);
+        if (result.payload) {
+          const newMerchant: QrisData = {
+            payload: result.payload,
+            merchantName: result.merchantName || "Merchant Terdeteksi",
+            nmid: result.nmid || "NMID: Unknown",
+            id: Date.now().toString()
+          };
+          setStaticQris(newMerchant);
+          const exists = savedMerchants.some(m => m.payload === newMerchant.payload);
+          if (!exists) {
+            updateSavedMerchants([newMerchant, ...savedMerchants]);
+          }
+          stopCamera();
+        }
+      } catch (err) {
+        // Silently continue scanning if frame analysis fails (e.g. no QR in frame)
+      } finally {
+        setIsProcessing(false);
+      }
+    }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -137,6 +216,7 @@ export const App: React.FC = () => {
     setQrImageUrl(null);
     setError(null);
     setView('input');
+    stopCamera();
   };
 
   const copyToClipboard = () => {
@@ -159,6 +239,9 @@ export const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#FDFCFB] text-slate-900 font-sans selection:bg-emerald-100 selection:text-emerald-900">
       
+      {/* Hidden canvas for camera frames */}
+      <canvas ref={canvasRef} className="hidden" />
+
       {/* Modal: Merchant List */}
       {showMerchantMenu && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -219,12 +302,18 @@ export const App: React.FC = () => {
               )}
             </div>
             
-            <div className="p-6 bg-slate-50 border-t border-slate-100">
+            <div className="p-6 bg-slate-50 border-t border-slate-100 grid grid-cols-2 gap-3">
               <button 
                 onClick={() => { setShowMerchantMenu(false); fileInputRef.current?.click(); }}
-                className="w-full flex items-center justify-center gap-3 py-4 bg-red-600 hover:bg-red-700 text-white rounded-[1.5rem] font-black shadow-lg shadow-red-200 transition-all active:scale-[0.98]"
+                className="flex items-center justify-center gap-2 py-4 bg-white border-2 border-slate-100 text-slate-700 rounded-[1.5rem] font-black text-xs hover:border-red-500 hover:text-red-600 transition-all"
               >
-                <Plus size={20} /> Tambah Baru
+                <Upload size={18} /> Upload
+              </button>
+              <button 
+                onClick={() => { setShowMerchantMenu(false); startCamera(); }}
+                className="flex items-center justify-center gap-2 py-4 bg-red-600 hover:bg-red-700 text-white rounded-[1.5rem] font-black text-xs shadow-lg shadow-red-200 transition-all active:scale-[0.98]"
+              >
+                <Camera size={18} /> Kamera
               </button>
             </div>
           </div>
@@ -265,7 +354,7 @@ export const App: React.FC = () => {
               
               <div className="flex items-center justify-between mb-8 relative z-10">
                 <h2 className="text-lg font-black flex items-center gap-3">
-                  <span className="w-8 h-8 rounded-full bg-red-600 text-white flex items-center justify-center text-sm">1</span>
+                  <span className="w-8 h-8 rounded-full bg-red-600 text-white flex items-center justify-center text-sm font-black">1</span>
                   Merchant Data
                 </h2>
                 {staticQris && (
@@ -276,16 +365,89 @@ export const App: React.FC = () => {
               </div>
 
               {!staticQris ? (
-                <div 
-                  onClick={() => fileInputRef.current?.click()}
-                  className="group border-2 border-dashed border-slate-200 rounded-[2rem] p-10 hover:border-red-400 hover:bg-red-50/20 transition-all cursor-pointer text-center"
-                >
-                  <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*" className="hidden" />
-                  <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
-                    {isProcessing ? <Loader2 className="animate-spin text-red-600" size={32} /> : <Upload className="text-slate-300" size={32} />}
-                  </div>
-                  <p className="text-lg font-black text-slate-900">{isProcessing ? "Menganalisa..." : "Upload QRIS"}</p>
-                  <p className="text-xs text-slate-400 font-medium mt-1">Format gambar .jpg, .png, atau .webp</p>
+                <div className="space-y-4">
+                  {isCameraActive ? (
+                    <div className="relative rounded-[2rem] overflow-hidden bg-black aspect-[4/3] shadow-inner border-4 border-red-600">
+                      <video 
+                        ref={videoRef} 
+                        autoPlay 
+                        playsInline 
+                        className="w-full h-full object-cover"
+                      />
+                      {/* Dimmed Background Overlay */}
+                      <div className="absolute inset-0 bg-black/40" style={{
+                        clipPath: 'polygon(0% 0%, 0% 100%, 15% 100%, 15% 15%, 85% 15%, 85% 85%, 15% 85%, 15% 100%, 100% 100%, 100% 0%)'
+                      }} />
+                      
+                      {/* Viewfinder Overlay */}
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <div className="w-[70%] aspect-square border-2 border-emerald-500/30 rounded-3xl relative shadow-[0_0_0_2000px_rgba(0,0,0,0.1)]">
+                           {/* Scanning Line */}
+                           <div className="absolute inset-x-0 top-0 h-1 bg-red-500 animate-[scan_2s_infinite] shadow-[0_0_15px_rgba(239,68,68,0.8)] z-20"></div>
+                           
+                           {/* Corner Brackets */}
+                           <div className="absolute -top-1 -left-1 w-10 h-10 border-t-4 border-l-4 border-emerald-500 rounded-tl-2xl z-20"></div>
+                           <div className="absolute -top-1 -right-1 w-10 h-10 border-t-4 border-r-4 border-emerald-500 rounded-tr-2xl z-20"></div>
+                           <div className="absolute -bottom-1 -left-1 w-10 h-10 border-b-4 border-l-4 border-emerald-500 rounded-bl-2xl z-20"></div>
+                           <div className="absolute -bottom-1 -right-1 w-10 h-10 border-b-4 border-r-4 border-emerald-500 rounded-br-2xl z-20"></div>
+
+                           {/* Center Icon Hint */}
+                           <div className="absolute inset-0 flex items-center justify-center opacity-20 pointer-events-none">
+                              <Maximize size={48} className="text-white" />
+                           </div>
+                        </div>
+
+                        {/* Hint Text */}
+                        <div className="mt-6 text-center z-20">
+                          <p className="text-white text-[11px] font-black uppercase tracking-[0.2em] bg-black/50 px-4 py-2 rounded-full backdrop-blur-md">
+                            Posisikan QRIS di tengah kotak
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="absolute bottom-6 inset-x-0 flex justify-center z-30">
+                        <button 
+                          onClick={stopCamera}
+                          className="bg-red-600/90 hover:bg-red-600 text-white px-6 py-3 rounded-full font-black text-xs uppercase tracking-widest flex items-center gap-2 backdrop-blur-md shadow-xl active:scale-95 transition-all"
+                        >
+                          <StopCircle size={16} /> Batal Scan
+                        </button>
+                      </div>
+
+                      {isProcessing && (
+                         <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[4px] flex items-center justify-center z-40">
+                           <div className="bg-white px-6 py-4 rounded-[1.5rem] flex items-center gap-4 shadow-2xl animate-in zoom-in-95">
+                              <Loader2 className="animate-spin text-red-600" size={24} />
+                              <span className="text-xs font-black text-slate-900 uppercase tracking-widest">Memindai Kode...</span>
+                           </div>
+                         </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div 
+                        onClick={() => fileInputRef.current?.click()}
+                        className="group border-2 border-dashed border-slate-200 rounded-[2rem] p-8 hover:border-red-400 hover:bg-red-50/20 transition-all cursor-pointer text-center"
+                      >
+                        <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*" className="hidden" />
+                        <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                          {isProcessing && !isCameraActive ? <Loader2 className="animate-spin text-red-600" size={24} /> : <Upload className="text-slate-300" size={24} />}
+                        </div>
+                        <p className="text-sm font-black text-slate-900">Upload QRIS</p>
+                        <p className="text-[10px] text-slate-400 font-medium mt-1">File Gambar</p>
+                      </div>
+                      <div 
+                        onClick={startCamera}
+                        className="group border-2 border-dashed border-slate-200 rounded-[2rem] p-8 hover:border-emerald-400 hover:bg-emerald-50/20 transition-all cursor-pointer text-center"
+                      >
+                        <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                          <Camera className="text-slate-300 group-hover:text-emerald-500" size={24} />
+                        </div>
+                        <p className="text-sm font-black text-slate-900">Scan Kamera</p>
+                        <p className="text-[10px] text-slate-400 font-medium mt-1">Langsung Scan</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="bg-gradient-to-r from-red-50/50 to-emerald-50/50 p-6 rounded-[2rem] border border-red-100 flex items-center justify-between">
@@ -315,7 +477,7 @@ export const App: React.FC = () => {
             {/* Amount Section */}
             <div className={`bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 transition-all duration-500 ${!staticQris ? 'opacity-30 pointer-events-none scale-[0.98]' : 'opacity-100 scale-100'}`}>
               <h2 className="text-lg font-black mb-8 flex items-center gap-3">
-                <span className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm">2</span>
+                <span className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-black">2</span>
                 Payment Details
               </h2>
 
